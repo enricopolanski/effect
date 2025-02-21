@@ -637,6 +637,7 @@ export const makeProtocolHttp = (client: HttpClient.HttpClient): Effect.Effect<
 > =>
   Protocol.make(Effect.fnUntraced(function*(writeResponse) {
     const serialization = yield* RpcSerialization.RpcSerialization
+    const isJson = serialization.contentType === "application/json"
 
     const send = (request: FromClientEncoded): Effect.Effect<void> => {
       if (request._tag !== "Request") {
@@ -650,6 +651,25 @@ export const makeProtocolHttp = (client: HttpClient.HttpClient): Effect.Effect<
       const body = typeof encoded === "string" ?
         HttpBody.text(encoded, serialization.contentType) :
         HttpBody.uint8Array(encoded, serialization.contentType)
+
+      if (isJson) {
+        return client.post("/", { body }).pipe(
+          Effect.flatMap((r) => r.json),
+          Effect.scoped,
+          Effect.flatMap((u) => {
+            if (!Array.isArray(u)) {
+              return Effect.dieMessage(`Expected an array of responses, but got: ${u}`)
+            }
+            let i = 0
+            return Effect.whileLoop({
+              while: () => i < u.length,
+              body: () => writeResponse(u[i++]),
+              step: constVoid
+            })
+          }),
+          Effect.orDie
+        )
+      }
 
       return client.post("/", { body }).pipe(
         Effect.flatMap((r) =>

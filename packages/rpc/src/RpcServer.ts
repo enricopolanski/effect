@@ -12,6 +12,7 @@ import * as Transferable from "@effect/platform/Transferable"
 import type { WorkerError } from "@effect/platform/WorkerError"
 import * as WorkerRunner from "@effect/platform/WorkerRunner"
 import type { NonEmptyReadonlyArray } from "effect/Array"
+import * as Arr from "effect/Array"
 import * as Cause from "effect/Cause"
 import * as Chunk from "effect/Chunk"
 import * as Context from "effect/Context"
@@ -762,11 +763,7 @@ export const makeProtocolWithHttpApp: Effect.Effect<
   RpcSerialization.RpcSerialization
 > = Effect.gen(function*() {
   const serialization = yield* RpcSerialization.RpcSerialization
-  if (serialization.contentType === "application/json") {
-    return yield* Effect.dieMessage(
-      "Http protocol does not support JSON serialization. Use RpcSerialization.layerNdjson or RpcSerialization.layerMsgPack instead."
-    )
-  }
+  const isJson = serialization.contentType === "application/json"
 
   const disconnects = yield* Mailbox.make<number>()
   let writeRequest!: (clientId: number, message: FromClientEncoded) => Effect.Effect<void>
@@ -778,11 +775,11 @@ export const makeProtocolWithHttpApp: Effect.Effect<
     readonly end: Effect.Effect<void>
   }>()
 
-  const httpApp: HttpApp.Default = Effect.gen(function*() {
+  const httpApp: HttpApp.Default<never, Scope.Scope> = Effect.gen(function*() {
     const request = yield* HttpServerRequest.HttpServerRequest
     const data = yield* Effect.orDie(request.arrayBuffer)
     const id = clientId++
-    const mailbox = yield* Mailbox.make<Uint8Array>()
+    const mailbox = yield* Mailbox.make<Uint8Array | FromServerEncoded>()
     const parser = serialization.unsafeMake()
     const encoder = new TextEncoder()
 
@@ -795,9 +792,11 @@ export const makeProtocolWithHttpApp: Effect.Effect<
           if (!serialization.supportsBigInt) {
             transformBigInt(response)
           }
-          return offer(parser.encode(response))
+          return isJson ? mailbox.offer(response) : offer(parser.encode(response))
         } catch (cause) {
-          return offer(parser.encode(ResponseDefectEncoded(cause)))
+          return isJson
+            ? mailbox.offer(ResponseDefectEncoded(cause))
+            : offer(parser.encode(ResponseDefectEncoded(cause)))
         }
       },
       end: mailbox.end
@@ -819,8 +818,31 @@ export const makeProtocolWithHttpApp: Effect.Effect<
 
     yield* writeRequest(id, constEof)
 
+    if (isJson) {
+      let done = false
+      yield* Effect.addFinalizer(() => {
+        clients.delete(id)
+        disconnects.unsafeOffer(id)
+        if (done) return Effect.void
+        return Effect.forEach(
+          requestIds,
+          (requestId) => writeRequest(id, { _tag: "Interrupt", requestId }),
+          { discard: true }
+        )
+      })
+      const responses = Arr.empty<FromServerEncoded>()
+      while (true) {
+        const [items, done] = yield* mailbox.takeAll
+        // eslint-disable-next-line no-restricted-syntax
+        responses.push(...items as any)
+        if (done) break
+      }
+      done = true
+      return HttpServerResponse.unsafeJson(responses)
+    }
+
     return HttpServerResponse.stream(
-      Stream.ensuringWith(Mailbox.toStream(mailbox), (exit) => {
+      Stream.ensuringWith(Mailbox.toStream(mailbox as Mailbox.ReadonlyMailbox<Uint8Array>), (exit) => {
         clients.delete(id)
         disconnects.unsafeOffer(id)
         if (!Exit.isInterrupted(exit)) return Effect.void
