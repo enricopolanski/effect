@@ -94,7 +94,9 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
   const context = yield* Effect.context<Rpc.ToHandler<Rpcs> | Scope.Scope>()
   const scope = yield* Scope.fork(Context.get(context, Scope.Scope), ExecutionStrategy.parallel)
   const fiberSet = yield* FiberSet.make()
-  const runFork = yield* FiberSet.runtime(fiberSet)()
+  const runFork = yield* FiberSet.runtime(fiberSet)().pipe(
+    Effect.interruptible
+  )
   const concurrencySemaphore = concurrency === "unbounded"
     ? undefined
     : yield* Effect.makeSemaphore(concurrency)
