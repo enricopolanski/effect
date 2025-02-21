@@ -201,14 +201,32 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
     // unwrap the fork data type
     const streamOrEffect = isFork ? result.value : result
 
-    let effect = applyMiddleware(
-      rpc,
-      context,
-      request.payload,
-      request.headers,
-      isStream
-        ? streamEffect(client, request, streamOrEffect)
-        : streamOrEffect as Effect.Effect<any>
+    let effect = Effect.matchEffect(
+      applyMiddleware(
+        rpc,
+        context,
+        request.payload,
+        request.headers,
+        isStream
+          ? streamEffect(client, request, streamOrEffect)
+          : streamOrEffect as Effect.Effect<any>
+      ),
+      {
+        onSuccess: (value) =>
+          options.onFromServer({
+            _tag: "Exit",
+            clientId: client.id,
+            requestId: request.id,
+            exit: Exit.succeed(value as any)
+          }),
+        onFailure: (cause) =>
+          options.onFromServer({
+            _tag: "Exit",
+            clientId: client.id,
+            requestId: request.id,
+            exit: Exit.fail(cause)
+          })
+      }
     )
     if (tracingEnabled) {
       effect = Effect.withSpan(effect, `${spanPrefix}.${request.tag}`, {
@@ -228,28 +246,18 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
     const fiber = runFork(effect)
     client.fibers.set(request.id, fiber)
     fiber.addObserver((exit) => {
-      let result: FromServer<any>
-      if (exit._tag === "Success") {
-        result = {
-          _tag: "Exit",
-          clientId: client.id,
-          requestId: request.id,
-          exit: Exit.succeed(exit.value)
-        }
-      } else {
-        const failureOrCause = Cause.failureOrCause(exit.cause)
-        result = {
-          _tag: "Exit",
-          clientId: client.id,
-          requestId: request.id,
-          exit: failureOrCause._tag === "Left"
-            ? Exit.fail(failureOrCause.left)
-            : Cause.isInterruptedOnly(failureOrCause.right)
-            ? Exit.interrupt(FiberId.none)
-            : Exit.die(Cause.squash(failureOrCause.right))
-        }
+      if (exit._tag === "Failure") {
+        runFork(
+          Cause.isInterruptedOnly(exit.cause) ?
+            options.onFromServer({
+              _tag: "Exit",
+              clientId: client.id,
+              requestId: request.id,
+              exit: Exit.interrupt(FiberId.none)
+            }) :
+            sendDefect(client, Cause.squash(exit.cause))
+        )
       }
-      runFork(options.onFromServer(result))
       client.fibers.delete(request.id)
       client.latches.delete(request.id)
       if (client.ended && client.fibers.size === 0) {
