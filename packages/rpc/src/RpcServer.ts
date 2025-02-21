@@ -92,7 +92,7 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
   const spanPrefix = options.spanPrefix ?? "RpcServer"
   const concurrency = options.concurrency ?? "unbounded"
   const context = yield* Effect.context<Rpc.ToHandler<Rpcs> | Scope.Scope>()
-  const scope = yield* Scope.fork(Context.get(context, Scope.Scope), ExecutionStrategy.parallel)
+  const scope = Context.get(context, Scope.Scope)
   const fiberSet = yield* FiberSet.make()
   const runFork = yield* FiberSet.runtime(fiberSet)().pipe(
     Effect.interruptible
