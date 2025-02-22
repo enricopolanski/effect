@@ -114,15 +114,22 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
   const shutdownLatch = Effect.unsafeMakeLatch(false)
   yield* Scope.addFinalizer(
     scope,
-    Effect.suspend(() => {
+    Effect.fiberIdWith((fiberId) => {
       isShutdown = true
       for (const client of clients.values()) {
         client.ended = true
         if (client.fibers.size === 0) {
           runFork(endClient(client))
+          continue
+        }
+        for (const fiber of client.fibers.values()) {
+          fiber.unsafeInterruptAsFork(fiberId)
         }
       }
-      return clients.size === 0 ? Effect.void : shutdownLatch.await
+      if (clients.size === 0) {
+        return Effect.void
+      }
+      return shutdownLatch.await
     })
   )
 
@@ -150,6 +157,8 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
             ended: false
           }
           clients.set(clientId, client)
+        } else if (client.ended) {
+          return Effect.interrupt
         }
 
         switch (message._tag) {
