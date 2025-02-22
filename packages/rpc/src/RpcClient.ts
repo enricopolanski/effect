@@ -144,14 +144,14 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
   const entries = new Map<RequestId, ClientEntry>()
 
   const clearEntries = Effect.fnUntraced(function*(exit: Exit.Exit<never>) {
-    for (const entry of entries.values()) {
+    for (const [id, entry] of entries) {
+      entries.delete(id)
       if (entry._tag === "Mailbox") {
         yield* entry.mailbox.done(exit)
       } else {
         entry.resume(exit)
       }
     }
-    entries.clear()
   })
 
   yield* Scope.addFinalizer(
@@ -242,22 +242,28 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
       entries.set(id, entry)
       return send.pipe(
         Effect.flatMap((request) =>
-          Effect.fork(options.onFromClient({
+          Effect.fork(Effect.interruptible(options.onFromClient({
             message: request,
             context,
             discard
-          }))
+          })))
         ),
         Effect.flatMap((fiber) =>
           Effect.async<any, any>((resume) => {
             if (result) {
-              resume(result)
+              resume(Effect.zipRight(Fiber.interrupt(fiber), result))
               return
             }
-            entry.resume = resume
+            entry.resume = (exit) => {
+              if (fiber.unsafePoll()) {
+                return resume(exit)
+              }
+              resume(Effect.zipRight(Fiber.interrupt(fiber), exit))
+            }
             fiber.addObserver((exit) => {
               exit._tag === "Failure" && resume(exit)
             })
+            return Fiber.interrupt(fiber)
           })
         ),
         Effect.onInterrupt(() => {
