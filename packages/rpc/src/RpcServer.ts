@@ -110,7 +110,21 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
   }
 
   const clients = new Map<number, Client>()
-  yield* Scope.addFinalizer(scope, Effect.sync(() => clients.clear()))
+  let isShutdown = false
+  const shutdownLatch = Effect.unsafeMakeLatch(false)
+  yield* Scope.addFinalizer(
+    scope,
+    Effect.suspend(() => {
+      isShutdown = true
+      for (const client of clients.values()) {
+        client.ended = true
+        if (client.fibers.size === 0) {
+          runFork(endClient(client))
+        }
+      }
+      return clients.size === 0 ? Effect.void : shutdownLatch.await
+    })
+  )
 
   const disconnect = (clientId: number) =>
     Effect.fiberIdWith((fiberId) => {
@@ -126,6 +140,7 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
   const write = (clientId: number, message: FromClient<Rpcs>): Effect.Effect<void> =>
     Effect.catchAllDefect(
       Effect.suspend(() => {
+        if (isShutdown) return Effect.interrupt
         let client = clients.get(clientId)
         if (!client) {
           client = {
@@ -169,10 +184,14 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
 
   const endClient = (client: Client) => {
     clients.delete(client.id)
-    return options.onFromServer({
+    const write = options.onFromServer({
       _tag: "ClientEnd",
       clientId: client.id
     })
+    if (isShutdown && clients.size === 0) {
+      return Effect.zipRight(write, shutdownLatch.open)
+    }
+    return write
   }
 
   const handleRequest = (client: Client, request: Request<Rpcs>): Effect.Effect<void> => {
@@ -202,7 +221,7 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
     // unwrap the fork data type
     const streamOrEffect = isFork ? result.value : result
 
-    let effect = Effect.matchEffect(
+    let effect = Effect.matchCauseEffect(
       applyMiddleware(
         rpc,
         context,
@@ -225,7 +244,7 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
             _tag: "Exit",
             clientId: client.id,
             requestId: request.id,
-            exit: Exit.fail(cause)
+            exit: Exit.failCause(cause)
           })
       }
     )
@@ -249,14 +268,12 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
     fiber.addObserver((exit) => {
       if (exit._tag === "Failure") {
         runFork(
-          Cause.isInterruptedOnly(exit.cause) ?
-            options.onFromServer({
-              _tag: "Exit",
-              clientId: client.id,
-              requestId: request.id,
-              exit: Exit.interrupt(FiberId.none)
-            }) :
-            sendDefect(client, Cause.squash(exit.cause))
+          options.onFromServer({
+            _tag: "Exit",
+            clientId: client.id,
+            requestId: request.id,
+            exit: Exit.interrupt(FiberId.none)
+          })
         )
       }
       client.fibers.delete(request.id)
