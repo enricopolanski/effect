@@ -47,7 +47,7 @@ export class ResourceMap<K, A, E> {
 
   get(key: K): Effect.Effect<A, E> {
     return Effect.withFiberRuntime((fiber) => {
-      if (this.isClosed.current) {
+      if (MutableRef.get(this.isClosed)) {
         return Effect.interrupt
       }
       const existing = MutableHashMap.get(this.entries, key)
