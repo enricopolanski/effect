@@ -230,8 +230,8 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
     // unwrap the fork data type
     const streamOrEffect = isFork ? result.value : result
 
-    let effect = Effect.matchCauseEffect(
-      applyMiddleware(
+    let effect = Effect.uninterruptible(Effect.matchCauseEffect(
+      Effect.interruptible(applyMiddleware(
         rpc,
         context,
         request.payload,
@@ -239,7 +239,7 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
         isStream
           ? streamEffect(client, request, streamOrEffect)
           : streamOrEffect as Effect.Effect<any>
-      ),
+      )),
       {
         onSuccess: (value) =>
           options.onFromServer({
@@ -256,7 +256,7 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
             exit: Exit.failCause(cause)
           })
       }
-    )
+    ))
     if (tracingEnabled) {
       effect = Effect.withSpan(effect, `${spanPrefix}.${request.tag}`, {
         parent: {
