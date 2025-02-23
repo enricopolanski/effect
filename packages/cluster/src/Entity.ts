@@ -25,7 +25,7 @@ import type * as Envelope from "./Envelope.js"
 import type { PodAddress } from "./PodAddress.js"
 import type * as Reply from "./Reply.js"
 import type { Sharding } from "./Sharding.js"
-import type { AlreadyProcessingMessage, MailboxFull, PersistenceError } from "./ShardingError.js"
+import type { AlreadyProcessingMessage, MailboxFull, PersistenceError } from "./ClusterError.js"
 
 /**
  * @since 1.0.0

@@ -9,7 +9,7 @@ import * as Option from "effect/Option"
 import { Pod } from "./Pod.js"
 import { PodAddress } from "./PodAddress.js"
 import { ShardId } from "./ShardId.js"
-import type { PersistenceError } from "./ShardingError.js"
+import type { PersistenceError } from "./ClusterError.js"
 
 /**
  * Represents a generic interface to the persistent storage required by the

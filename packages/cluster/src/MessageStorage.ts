@@ -20,8 +20,8 @@ import * as Message from "./Message.js"
 import * as Reply from "./Reply.js"
 import type { ShardId } from "./ShardId.js"
 import type { ShardingConfig } from "./ShardingConfig.js"
-import type { PersistenceError } from "./ShardingError.js"
-import { MalformedMessage } from "./ShardingError.js"
+import type { PersistenceError } from "./ClusterError.js"
+import { MalformedMessage } from "./ClusterError.js"
 import * as Snowflake from "./Snowflake.js"
 
 /**

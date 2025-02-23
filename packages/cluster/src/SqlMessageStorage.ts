@@ -16,7 +16,7 @@ import * as MessageStorage from "./MessageStorage.js"
 import { SaveResultEncoded } from "./MessageStorage.js"
 import type * as Reply from "./Reply.js"
 import type { ShardingConfig } from "./ShardingConfig.js"
-import { PersistenceError } from "./ShardingError.js"
+import { PersistenceError } from "./ClusterError.js"
 import * as Snowflake from "./Snowflake.js"
 
 /**

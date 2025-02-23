@@ -43,7 +43,7 @@ import { Pods, RpcClientProtocol } from "./Pods.js"
 import { PodsHealth } from "./PodsHealth.js"
 import { ShardId } from "./ShardId.js"
 import { ShardingConfig } from "./ShardingConfig.js"
-import { PodNotRegistered } from "./ShardingError.js"
+import { PodNotRegistered } from "./ClusterError.js"
 import { ShardStorage } from "./ShardStorage.js"
 
 /**

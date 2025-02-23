@@ -10,8 +10,8 @@ import * as Option from "effect/Option"
 import * as Schema from "effect/Schema"
 import * as Envelope from "./Envelope.js"
 import type * as Reply from "./Reply.js"
-import type { PersistenceError } from "./ShardingError.js"
-import { MalformedMessage } from "./ShardingError.js"
+import type { PersistenceError } from "./ClusterError.js"
+import { MalformedMessage } from "./ClusterError.js"
 
 /**
  * @since 1.0.0

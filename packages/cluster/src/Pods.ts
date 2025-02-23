@@ -27,7 +27,7 @@ import {
   MailboxFull,
   PersistenceError,
   PodUnavailable
-} from "./ShardingError.js"
+} from "./ClusterError.js"
 import * as Snowflake from "./Snowflake.js"
 
 /**

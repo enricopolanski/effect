@@ -1,6 +1,11 @@
 /**
  * @since 1.0.0
  */
+export * as ClusterError from "./ClusterError.js"
+
+/**
+ * @since 1.0.0
+ */
 export * as ClusterMetrics from "./ClusterMetrics.js"
 
 /**
@@ -52,16 +57,6 @@ export * as HttpShardManager from "./HttpShardManager.js"
  * @since 1.0.0
  */
 export * as Message from "./Message.js"
-
-/**
- * @since 1.0.0
- */
-export * as MessageId from "./MessageId.js"
-
-/**
- * @since 1.0.0
- */
-export * as MessageState from "./MessageState.js"
 
 /**
  * @since 1.0.0
@@ -122,11 +117,6 @@ export * as Sharding from "./Sharding.js"
  * @since 1.0.0
  */
 export * as ShardingConfig from "./ShardingConfig.js"
-
-/**
- * @since 1.0.0
- */
-export * as ShardingError from "./ShardingError.js"
 
 /**
  * @since 1.0.0

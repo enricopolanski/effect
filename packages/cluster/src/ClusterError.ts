@@ -13,7 +13,7 @@ import { SnowflakeFromString } from "./Snowflake.js"
  * @since 1.0.0
  * @category Symbols
  */
-export const TypeId: unique symbol = Symbol.for("@effect/cluster/ShardingError")
+export const TypeId: unique symbol = Symbol.for("@effect/cluster/ClusterError")
 
 /**
  * @since 1.0.0

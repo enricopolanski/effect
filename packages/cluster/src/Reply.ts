@@ -14,7 +14,7 @@ import type * as Option from "effect/Option"
 import { hasProperty } from "effect/Predicate"
 import * as Schema from "effect/Schema"
 import type { OutgoingRequest } from "./Message.js"
-import { MalformedMessage } from "./ShardingError.js"
+import { MalformedMessage } from "./ClusterError.js"
 import { Snowflake, SnowflakeFromString } from "./Snowflake.js"
 
 /**
