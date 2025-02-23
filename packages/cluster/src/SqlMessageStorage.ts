@@ -11,12 +11,12 @@ import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 import * as Option from "effect/Option"
 import * as Schedule from "effect/Schedule"
+import { PersistenceError } from "./ClusterError.js"
 import type * as Envelope from "./Envelope.js"
 import * as MessageStorage from "./MessageStorage.js"
 import { SaveResultEncoded } from "./MessageStorage.js"
 import type * as Reply from "./Reply.js"
 import type { ShardingConfig } from "./ShardingConfig.js"
-import { PersistenceError } from "./ClusterError.js"
 import * as Snowflake from "./Snowflake.js"
 
 /**

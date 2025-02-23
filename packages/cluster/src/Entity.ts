@@ -19,13 +19,13 @@ import * as Option from "effect/Option"
 import * as Predicate from "effect/Predicate"
 import type { Scope } from "effect/Scope"
 import type * as Stream from "effect/Stream"
+import type { AlreadyProcessingMessage, MailboxFull, PersistenceError } from "./ClusterError.js"
 import type { EntityAddress } from "./EntityAddress.js"
 import { EntityType } from "./EntityType.js"
 import type * as Envelope from "./Envelope.js"
 import type { PodAddress } from "./PodAddress.js"
 import type * as Reply from "./Reply.js"
 import type { Sharding } from "./Sharding.js"
-import type { AlreadyProcessingMessage, MailboxFull, PersistenceError } from "./ClusterError.js"
 
 /**
  * @since 1.0.0

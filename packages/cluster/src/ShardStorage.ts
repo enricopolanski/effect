@@ -6,10 +6,10 @@ import * as Effect from "effect/Effect"
 import * as Layer from "effect/Layer"
 import * as MutableHashMap from "effect/MutableHashMap"
 import * as Option from "effect/Option"
+import type { PersistenceError } from "./ClusterError.js"
 import { Pod } from "./Pod.js"
 import { PodAddress } from "./PodAddress.js"
 import { ShardId } from "./ShardId.js"
-import type { PersistenceError } from "./ClusterError.js"
 
 /**
  * Represents a generic interface to the persistent storage required by the

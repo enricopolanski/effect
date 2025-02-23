@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect"
+import type { EntityNotManagedByPod } from "../ClusterError.js"
 import type { EntityAddress } from "../EntityAddress.js"
 import type { EntityId } from "../EntityId.js"
-import type { EntityNotManagedByPod } from "../ClusterError.js"
 import type { EntityState } from "./entityManager.js"
 import type { ResourceMap } from "./resourceMap.js"
 

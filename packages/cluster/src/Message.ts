@@ -8,10 +8,10 @@ import * as Data from "effect/Data"
 import * as Effect from "effect/Effect"
 import * as Option from "effect/Option"
 import * as Schema from "effect/Schema"
-import * as Envelope from "./Envelope.js"
-import type * as Reply from "./Reply.js"
 import type { PersistenceError } from "./ClusterError.js"
 import { MalformedMessage } from "./ClusterError.js"
+import * as Envelope from "./Envelope.js"
+import type * as Reply from "./Reply.js"
 
 /**
  * @since 1.0.0

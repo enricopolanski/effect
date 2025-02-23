@@ -30,6 +30,7 @@ import * as Queue from "effect/Queue"
 import * as Schedule from "effect/Schedule"
 import * as Schema from "effect/Schema"
 import type { Scope } from "effect/Scope"
+import { PodNotRegistered } from "./ClusterError.js"
 import * as ClusterMetrics from "./ClusterMetrics.js"
 import {
   decideAssignmentsForUnassignedShards,
@@ -43,7 +44,6 @@ import { Pods, RpcClientProtocol } from "./Pods.js"
 import { PodsHealth } from "./PodsHealth.js"
 import { ShardId } from "./ShardId.js"
 import { ShardingConfig } from "./ShardingConfig.js"
-import { PodNotRegistered } from "./ClusterError.js"
 import { ShardStorage } from "./ShardStorage.js"
 
 /**
