@@ -24,7 +24,7 @@ import { EntityType } from "./EntityType.js"
 import type * as Envelope from "./Envelope.js"
 import type { PodAddress } from "./PodAddress.js"
 import type * as Reply from "./Reply.js"
-import * as Sharding from "./Sharding.js"
+import type { Sharding } from "./Sharding.js"
 import type { AlreadyProcessingMessage, MailboxFull, PersistenceError } from "./ShardingError.js"
 
 /**
@@ -72,7 +72,7 @@ export interface Entity<in out Rpcs extends Rpc.Any> extends Equal.Equal {
   readonly client: Effect.Effect<
     (entityId: string) => RpcClient.RpcClient<Rpcs, MailboxFull | AlreadyProcessingMessage | PersistenceError>,
     never,
-    Scope | Sharding.Sharding
+    Scope | Sharding
   >
 
   /**
@@ -97,7 +97,7 @@ export interface Entity<in out Rpcs extends Rpc.Any> extends Equal.Equal {
     | RpcGroup.HandlersContext<Rpcs, Handlers>
     | Rpc.Context<Rpcs>
     | Rpc.Middleware<Rpcs>
-    | Sharding.Sharding
+    | Sharding
   >
 
   /**
@@ -133,7 +133,7 @@ export interface Entity<in out Rpcs extends Rpc.Any> extends Equal.Equal {
     | R
     | Rpc.Context<Rpcs>
     | Rpc.Middleware<Rpcs>
-    | Sharding.Sharding
+    | Sharding
   >
 }
 /**
@@ -173,7 +173,7 @@ const Proto = {
     return fromRpcGroup(this.type, this.protocol.annotateContext(context))
   },
   get client() {
-    return Sharding.Sharding.pipe(
+    return shardingTag.pipe(
       Effect.flatMap((sharding) => sharding.makeClient(this as any))
     )
   },
@@ -195,9 +195,9 @@ const Proto = {
     | RpcGroup.HandlersContext<Rpcs, Handlers>
     | Rpc.Context<Rpcs>
     | Rpc.Middleware<Rpcs>
-    | Sharding.Sharding
+    | Sharding
   > {
-    return Sharding.Sharding.pipe(
+    return shardingTag.pipe(
       Effect.flatMap((sharding) =>
         sharding.registerEntity(
           this,
@@ -418,3 +418,5 @@ export class Request<Rpc extends Rpc.Any> extends Data.Class<
     return this.lastSentChunk.value.sequence + 1
   }
 }
+
+const shardingTag = Context.GenericTag<Sharding, Sharding["Type"]>("@effect/cluster/Sharding")
