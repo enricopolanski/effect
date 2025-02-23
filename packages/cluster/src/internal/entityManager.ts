@@ -26,7 +26,7 @@ import * as Message from "../Message.js"
 import type { PodAddress } from "../PodAddress.js"
 import * as Reply from "../Reply.js"
 import type { ShardId } from "../ShardId.js"
-import { Sharding } from "../Sharding.js"
+import type { Sharding } from "../Sharding.js"
 import { ShardingConfig } from "../ShardingConfig.js"
 import { AlreadyProcessingMessage, EntityNotManagedByPod, MailboxFull, MalformedMessage } from "../ShardingError.js"
 import * as Snowflake from "../Snowflake.js"
@@ -72,6 +72,7 @@ export const make = Effect.fnUntraced(function*<
   entity: Entity<Rpcs>,
   buildHandlers: Effect.Effect<Handlers, never, RX>,
   options: {
+    readonly sharding: Sharding["Type"]
     readonly storageEnabled: boolean
     readonly podAddress: PodAddress
     readonly maxIdleTime?: DurationInput | undefined
@@ -80,7 +81,6 @@ export const make = Effect.fnUntraced(function*<
   }
 ) {
   const config = yield* ShardingConfig
-  const sharding = yield* Sharding
   const snowflakeGen = yield* Snowflake.Generator
   const managerScope = yield* Effect.scope
   const mailboxCapacity = options.mailboxCapacity ?? config.entityMailboxCapacity
@@ -94,7 +94,7 @@ export const make = Effect.fnUntraced(function*<
     EntityState,
     EntityNotManagedByPod
   > = yield* ResourceMap.make(Effect.fnUntraced(function*(address) {
-    if (yield* sharding.isShutdown || !sharding.hasShard(address.shardId)) {
+    if (yield* options.sharding.isShutdown || !options.sharding.hasShard(address.shardId)) {
       return yield* new EntityNotManagedByPod({ address })
     }
 

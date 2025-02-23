@@ -299,10 +299,10 @@ export const make = Effect.gen(function*() {
       const manager = yield* EntityManager.make(entity, build, {
         ...options,
         storageEnabled,
-        podAddress: Option.getOrThrow(config.podAddress)
+        podAddress: Option.getOrThrow(config.podAddress),
+        sharding
       }).pipe(
         Effect.provide(context.pipe(
-          Context.add(Sharding, sharding),
           Context.add(EntityReaper, reaper),
           Context.add(Scope.Scope, scope),
           Context.add(Snowflake.Generator, snowflakeGen)
