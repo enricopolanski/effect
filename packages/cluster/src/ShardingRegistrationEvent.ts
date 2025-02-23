@@ -38,6 +38,10 @@ export interface SingletonRegistered {
   readonly address: SingletonAddress
 }
 
+/**
+ * @since 1.0.0
+ * @category pattern matching
+ */
 export const {
   /**
    * @since 1.0.0
