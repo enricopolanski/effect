@@ -53,7 +53,7 @@ export const make: Effect.Effect<
   const pods = yield* Pods.Pods
 
   function isAlive(address: PodAddress): Effect.Effect<boolean> {
-    return Effect.isSuccess(pods.ping(address))
+    return Effect.isSuccess(Effect.timeout(pods.ping(address), 3000))
   }
 
   return PodsHealth.of({ isAlive })
