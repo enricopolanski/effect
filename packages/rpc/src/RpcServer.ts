@@ -18,7 +18,6 @@ import * as Chunk from "effect/Chunk"
 import * as Context from "effect/Context"
 import * as Deferred from "effect/Deferred"
 import * as Effect from "effect/Effect"
-import * as ExecutionStrategy from "effect/ExecutionStrategy"
 import * as Exit from "effect/Exit"
 import * as Fiber from "effect/Fiber"
 import * as FiberId from "effect/FiberId"
@@ -425,7 +424,7 @@ export const make: <Rpcs extends Rpc.Any>(
 ) {
   const { disconnects, end, run, send, supportsAck, supportsTransferables } = yield* Protocol
   const context = yield* Effect.context<Rpc.ToHandler<Rpcs> | Rpc.Middleware<Rpcs>>()
-  const scope = yield* Scope.make(ExecutionStrategy.parallel)
+  const scope = yield* Scope.make()
 
   const server = yield* makeNoSerialization(group, {
     ...options,
