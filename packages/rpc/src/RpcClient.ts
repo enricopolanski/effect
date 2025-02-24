@@ -370,18 +370,12 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
   const sendInterrupt = (requestId: RequestId, context: Context.Context<never>): Effect.Effect<void> =>
     Effect.async<void>((resume) => {
       const fiber = options.onFromClient({ message: { _tag: "Interrupt", requestId }, context, discard: false }).pipe(
-        Effect.ignore,
+        Effect.timeout(1000),
         Effect.runFork
       )
-      fiber.addObserver(resume)
-      // on interrupt, apply timeout of 1 second
-      return Effect.suspend(() =>
-        Effect.flatten(Effect.timeoutTo(Fiber.await(fiber), {
-          duration: 1000,
-          onSuccess: () => Effect.void,
-          onTimeout: () => Fiber.interrupt(fiber)
-        }))
-      )
+      fiber.addObserver(() => {
+        resume(Effect.void)
+      })
     })
 
   const write = (message: FromServer<Rpcs>): Effect.Effect<void> => {
