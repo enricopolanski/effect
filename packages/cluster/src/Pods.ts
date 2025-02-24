@@ -429,7 +429,7 @@ export const makeRpc: Effect.Effect<
   return yield* make({
     ping(address) {
       return RcMap.get(clients, address).pipe(
-        Effect.flatMap((client) => client.Ping()),
+        Effect.flatMap((client) => Effect.timeout(client.Ping(), 1000)),
         Effect.scoped,
         Effect.catchAllCause(() => Effect.fail(new PodUnavailable({ address })))
       )

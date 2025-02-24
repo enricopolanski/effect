@@ -35,7 +35,7 @@ export class State {
         }
       }), { concurrency: storedPods.length, discard: true })
     if (deadPods.length > 0) {
-      yield* Effect.logWarning("Ignoring pods that are no longer considered alive: ", deadPods)
+      yield* Effect.logWarning("Ignoring pods that are no longer considered alive:", deadPods)
     }
 
     // Determine which shards remain unassigned to a pod
