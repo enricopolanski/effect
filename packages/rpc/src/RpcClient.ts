@@ -214,7 +214,7 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
     context: Context.Context<never>,
     discard: boolean
   ) =>
-    Effect.withFiberRuntime<any, any, any>((fiber) => {
+    Effect.withFiberRuntime<any, any, any>((parentFiber) => {
       if (isShutdown) {
         return Effect.interrupt
       }
@@ -227,7 +227,7 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
         traceId: span.traceId,
         spanId: span.spanId,
         sampled: span.sampled,
-        headers: Headers.merge(fiber.getFiberRef(currentHeaders), headers)
+        headers: Headers.merge(parentFiber.getFiberRef(currentHeaders), headers)
       })
       if (discard) {
         return Effect.flatMap(send, (message) =>
@@ -238,17 +238,21 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
           }))
       }
       return Effect.async<any, any>((resume) => {
-        let result: Exit.Exit<any, any> | undefined
         const entry: ClientEntry = {
           _tag: "Effect",
           rpc,
           context,
           resume(exit) {
-            result = exit
+            resume(exit)
+            if (!fiber.unsafePoll()) {
+              parentFiber.currentScheduler.scheduleTask(() => {
+                fiber.unsafeInterruptAsFork(parentFiber.id())
+              }, 0)
+            }
           }
         }
         entries.set(id, entry)
-        fiber = send.pipe(
+        const fiber = send.pipe(
           Effect.flatMap((request) =>
             options.onFromClient({
               message: request,
@@ -259,12 +263,9 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
           Effect.runFork
         )
         fiber.addObserver((exit) => {
-          if (result) {
-            return resume(result)
-          } else if (exit._tag === "Failure") {
+          if (exit._tag === "Failure") {
             return resume(exit)
           }
-          entry.resume = resume
         })
 
         return Effect.suspend(() => {
