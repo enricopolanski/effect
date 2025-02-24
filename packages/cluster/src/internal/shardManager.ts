@@ -33,7 +33,7 @@ export class State {
         } else {
           deadPods.push(pod)
         }
-      }), { concurrency: storedPods.length, discard: true })
+      }), { concurrency: "unbounded", discard: true })
     if (deadPods.length > 0) {
       yield* Effect.logWarning("Ignoring pods that are no longer considered alive:", deadPods)
     }
