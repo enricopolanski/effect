@@ -143,6 +143,15 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
   }
   const entries = new Map<RequestId, ClientEntry>()
 
+  let isShutdown = false
+  yield* Scope.addFinalizer(
+    scope,
+    Effect.fiberIdWith((fiberId) => {
+      isShutdown = true
+      return clearEntries(Exit.interrupt(fiberId))
+    })
+  )
+
   const clearEntries = Effect.fnUntraced(function*(exit: Exit.Exit<never>) {
     for (const [id, entry] of entries) {
       entries.delete(id)
@@ -153,11 +162,6 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
       }
     }
   })
-
-  yield* Scope.addFinalizer(
-    scope,
-    Effect.fiberIdWith((fiberId) => clearEntries(Exit.interrupt(fiberId)))
-  )
 
   const onRequest = (rpc: Rpc.AnyWithProps) => {
     const isStream = RpcSchema.isStreamSchema(rpc.successSchema)
@@ -211,16 +215,10 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
     discard: boolean
   ) =>
     Effect.withFiberRuntime<any, any, any>((fiber) => {
-      const id = generateRequestId()
-      let result: Exit.Exit<any, any> | undefined
-      const entry: ClientEntry = {
-        _tag: "Effect",
-        rpc,
-        context,
-        resume(_) {
-          result = _
-        }
+      if (isShutdown) {
+        return Effect.interrupt
       }
+      const id = generateRequestId()
       const send = middleware({
         _tag: "Request",
         id,
@@ -239,38 +237,41 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
             discard
           }))
       }
-      entries.set(id, entry)
-      return send.pipe(
-        Effect.flatMap((request) =>
-          Effect.fork(Effect.interruptible(options.onFromClient({
-            message: request,
-            context,
-            discard
-          })))
-        ),
-        Effect.flatMap((fiber) =>
-          Effect.async<any, any>((resume) => {
-            if (result) {
-              resume(Effect.zipRight(Fiber.interrupt(fiber), result))
-              return
-            }
-            entry.resume = (exit) => {
-              if (fiber.unsafePoll()) {
-                return resume(exit)
-              }
-              resume(Effect.zipRight(Fiber.interrupt(fiber), exit))
-            }
-            fiber.addObserver((exit) => {
-              exit._tag === "Failure" && resume(exit)
+      return Effect.async<any, any>((resume) => {
+        let result: Exit.Exit<any, any> | undefined
+        const entry: ClientEntry = {
+          _tag: "Effect",
+          rpc,
+          context,
+          resume(exit) {
+            result = exit
+          }
+        }
+        entries.set(id, entry)
+        fiber = send.pipe(
+          Effect.flatMap((request) =>
+            options.onFromClient({
+              message: request,
+              context,
+              discard
             })
-            return Fiber.interrupt(fiber)
-          })
-        ),
-        Effect.onInterrupt(() => {
-          entries.delete(id)
-          return sendInterrupt(id, context)
+          ),
+          Effect.runFork
+        )
+        fiber.addObserver((exit) => {
+          if (result) {
+            return resume(result)
+          } else if (exit._tag === "Failure") {
+            return resume(exit)
+          }
+          entry.resume = resume
         })
-      )
+
+        return Effect.suspend(() => {
+          entries.delete(id)
+          return Effect.zipRight(Fiber.interrupt(fiber), sendInterrupt(id, context))
+        })
+      })
     })
 
   const onStreamRequest = Effect.fnUntraced(function*(
@@ -281,6 +282,10 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
     streamBufferSize: number,
     context: Context.Context<never>
   ) {
+    if (isShutdown) {
+      return yield* Effect.interrupt
+    }
+
     const span = yield* Effect.makeSpanScoped(`${spanPrefix}.${rpc._tag}`).pipe(
       disableTracing ? Effect.withTracerEnabled(false) : identity
     )
@@ -362,24 +367,21 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any, E>(
   }
 
   const sendInterrupt = (requestId: RequestId, context: Context.Context<never>): Effect.Effect<void> =>
-    options.onFromClient({ message: { _tag: "Interrupt", requestId }, context, discard: false }).pipe(
-      Effect.ignore,
-      Effect.interruptible,
-      Effect.fork,
-      Effect.flatMap((fiber) =>
-        Effect.async<void>((resume) => {
-          fiber.addObserver(resume)
-          // on interrupt, apply timeout of 1 second
-          return Effect.suspend(() =>
-            Effect.flatten(Effect.timeoutTo(Fiber.await(fiber), {
-              duration: 1000,
-              onSuccess: () => Effect.void,
-              onTimeout: () => Fiber.interrupt(fiber)
-            }))
-          )
-        })
+    Effect.async<void>((resume) => {
+      const fiber = options.onFromClient({ message: { _tag: "Interrupt", requestId }, context, discard: false }).pipe(
+        Effect.ignore,
+        Effect.runFork
       )
-    )
+      fiber.addObserver(resume)
+      // on interrupt, apply timeout of 1 second
+      return Effect.suspend(() =>
+        Effect.flatten(Effect.timeoutTo(Fiber.await(fiber), {
+          duration: 1000,
+          onSuccess: () => Effect.void,
+          onTimeout: () => Fiber.interrupt(fiber)
+        }))
+      )
+    })
 
   const write = (message: FromServer<Rpcs>): Effect.Effect<void> => {
     switch (message._tag) {
