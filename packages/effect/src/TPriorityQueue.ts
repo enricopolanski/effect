@@ -1,6 +1,7 @@
 /**
  * @since 2.0.0
  */
+import type { NonEmptyArray } from "./Array.js"
 import type * as Chunk from "./Chunk.js"
 import * as internal from "./internal/stm/tPriorityQueue.js"
 import type * as Option from "./Option.js"
@@ -40,7 +41,7 @@ export interface TPriorityQueue<in out A> extends TPriorityQueue.Variance<A> {}
  */
 export interface TPriorityQueue<in out A> {
   /** @internal */
-  readonly ref: TRef.TRef<SortedMap.SortedMap<A, [A, ...Array<A>]>>
+  readonly ref: TRef.TRef<SortedMap.SortedMap<A, NonEmptyArray<A>>>
 }
 
 /**

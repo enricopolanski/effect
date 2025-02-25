@@ -28,13 +28,13 @@ const tPriorityQueueVariance = {
 /** @internal */
 export class TPriorityQueueImpl<in out A> implements TPriorityQueue.TPriorityQueue<A> {
   readonly [TPriorityQueueTypeId] = tPriorityQueueVariance
-  constructor(readonly ref: TRef.TRef<SortedMap.SortedMap<A, [A, ...Array<A>]>>) {}
+  constructor(readonly ref: TRef.TRef<SortedMap.SortedMap<A, NonEmptyArray<A>>>) {}
 }
 
 /** @internal */
 export const empty = <A>(order: Order.Order<A>): STM.STM<TPriorityQueue.TPriorityQueue<A>> =>
   pipe(
-    tRef.make(SortedMap.empty<A, [A, ...Array<A>]>(order)),
+    tRef.make(SortedMap.empty<A, NonEmptyArray<A>>(order)),
     core.map((ref) => new TPriorityQueueImpl(ref))
   )
 
@@ -226,7 +226,7 @@ export const takeUpTo = dual<
     const iterator = map[Symbol.iterator]()
     let updated = map
     let index = 0
-    let next: IteratorResult<readonly [A, [A, ...Array<A>]], any>
+    let next: IteratorResult<readonly [A, NonEmptyArray<A>], any>
     while ((next = iterator.next()) && !next.done && index < n) {
       const [key, value] = next.value
       const [left, right] = pipe(value, Arr.splitAt(n - index))
@@ -234,7 +234,7 @@ export const takeUpTo = dual<
         builder.push(value)
       }
       if (right.length > 0) {
-        updated = SortedMap.set(updated, key, right as [A, ...Array<A>])
+        updated = SortedMap.set(updated, key, right as NonEmptyArray<A>)
       } else {
         updated = SortedMap.remove(updated, key)
       }

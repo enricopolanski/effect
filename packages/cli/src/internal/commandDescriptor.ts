@@ -268,7 +268,7 @@ export const withSubcommands = dual<
       readonly [id: unknown, command: Descriptor.Command<any>]
     >
   >(
-    subcommands: [...Subcommands]
+    subcommands: Subcommands
   ) => <A>(
     self: Descriptor.Command<A>
   ) => Descriptor.Command<
@@ -284,7 +284,7 @@ export const withSubcommands = dual<
     >
   >(
     self: Descriptor.Command<A>,
-    subcommands: [...Subcommands]
+    subcommands: Subcommands
   ) => Descriptor.Command<
     Descriptor.Command.ComputeParsedType<
       & A
