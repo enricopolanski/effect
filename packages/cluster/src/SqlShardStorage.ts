@@ -243,35 +243,13 @@ export const make = Effect.fnUntraced(function*(options?: {
     ),
 
     refresh: (address, shardIds) =>
-      sql.onDialectOrElse({
-        mysql: () =>
-          sql`UPDATE ${locksTableSql} SET acquired_at = ${sqlNow} WHERE address = ${address} AND ${
-            sql.in("shard_id", shardIds)
-          }`.pipe(
-            Effect.andThen(
-              sql`SELECT shard_id FROM ${locksTableSql} WHERE address = ${address} AND acquired_at >= ${lessThan120SecondsAgo}`
-                .values
-            )
-          ),
-        pg: () =>
-          sql`UPDATE ${locksTableSql} SET acquired_at = ${sqlNow} WHERE address = ${address} AND ${
-            sql.in("shard_id", shardIds)
-          } RETURNING shard_id`.values,
-        mssql: () =>
-          sql`UPDATE ${locksTableSql} SET acquired_at = ${sqlNow} OUTPUT inserted.shard_id WHERE address = ${address} AND ${
-            sql.in("shard_id", shardIds)
-          }`.values,
-        orElse: () =>
-          // sqlite
-          sql`UPDATE ${locksTableSql} SET acquired_at = ${sqlNow} WHERE address = ${address} AND ${
-            sql.in("shard_id", shardIds)
-          }`.pipe(
-            Effect.andThen(
-              sql`SELECT shard_id FROM ${locksTableSql} WHERE address = ${address} AND acquired_at >= ${lessThan120SecondsAgo}`
-                .values
-            )
-          )
-      }).pipe(
+      sql`UPDATE ${locksTableSql} SET acquired_at = ${sqlNow} WHERE address = ${address} AND ${
+        sql.in("shard_id", shardIds)
+      }`.pipe(
+        Effect.andThen(
+          sql`SELECT shard_id FROM ${locksTableSql} WHERE address = ${address} AND acquired_at > ${lessThan120SecondsAgo}`
+            .values
+        ),
         Effect.map((rows) => rows.map((row) => Number(row[0]))),
         PersistenceError.refail
       ),
