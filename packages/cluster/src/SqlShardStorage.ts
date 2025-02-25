@@ -140,6 +140,13 @@ export const make = Effect.fnUntraced(function*(options?: {
   })
   const sqlNow = sql.literal(sqlNowString)
 
+  const lessThan120SecondsAgo = sql.onDialectOrElse({
+    pg: () => sql`${sqlNow} - INTERVAL '120 seconds'`,
+    mysql: () => sql`DATE_SUB(${sqlNow}, INTERVAL 120 SECOND)`,
+    mssql: () => sql`DATEADD(SECOND, -120, ${sqlNow})`,
+    orElse: () => sql`datetime(${sqlNow}, '-120 seconds')`
+  })
+
   return yield* ShardStorage.makeEncoded({
     getAssignments: sql`SELECT shard_id, address FROM ${shardsTableSql} ORDER BY shard_id`.values.pipe(
       PersistenceError.refail
@@ -187,21 +194,21 @@ export const make = Effect.fnUntraced(function*(options?: {
               ON CONFLICT (shard_id) DO UPDATE
               SET address = ${address}, acquired_at = ${sqlNow}
               WHERE ${locksTableSql}.address = ${address}
-                OR ${locksTableSql}.acquired_at < (${sqlNow} - INTERVAL '90 seconds')
+                OR ${locksTableSql}.acquired_at < (${sqlNow} - INTERVAL '120 seconds')
             `,
           mysql: () =>
             sql`
               INSERT INTO ${locksTableSql} (shard_id, address, acquired_at) VALUES ${sql.csv(values)}
               ON DUPLICATE KEY UPDATE
-              address = IF(address = VALUES(address) OR acquired_at < DATE_SUB(${sqlNow}, INTERVAL 90 SECOND), VALUES(address), address),
-              acquired_at = IF(address = VALUES(address) OR acquired_at < DATE_SUB(${sqlNow}, INTERVAL 90 SECOND), VALUES(acquired_at), acquired_at)
+              address = IF(address = VALUES(address) OR acquired_at < DATE_SUB(${sqlNow}, INTERVAL 120 SECOND), VALUES(address), address),
+              acquired_at = IF(address = VALUES(address) OR acquired_at < DATE_SUB(${sqlNow}, INTERVAL 120 SECOND), VALUES(acquired_at), acquired_at)
             `,
           mssql: () =>
             sql`
               MERGE ${locksTableSql} WITH (HOLDLOCK) AS target
               USING (SELECT * FROM (VALUES ${sql.csv(values)})) AS source (shard_id, address, acquired_at)
               ON target.shard_id = source.shard_id
-              WHEN MATCHED AND (target.address = source.address OR DATEDIFF(SECOND, target.acquired_at, ${sqlNow}) > 90) THEN
+              WHEN MATCHED AND (target.address = source.address OR DATEDIFF(SECOND, target.acquired_at, ${sqlNow}) > 120) THEN
                 UPDATE SET address = source.address, acquired_at = source.acquired_at
               WHEN NOT MATCHED THEN
                 INSERT (shard_id, address, acquired_at)
@@ -218,7 +225,7 @@ export const make = Effect.fnUntraced(function*(options?: {
                 SELECT 1 FROM ${locksTableSql}
                 WHERE shard_id = source.shard_id
                 AND address != ${address}
-                AND (strftime('%s', ${sqlNow}) - strftime('%s', acquired_at)) <= 90
+                AND (strftime('%s', ${sqlNow}) - strftime('%s', acquired_at)) <= 120
               )
               ON CONFLICT(shard_id) DO UPDATE
               SET address = ${address}, acquired_at = ${sqlNow}
@@ -236,9 +243,38 @@ export const make = Effect.fnUntraced(function*(options?: {
     ),
 
     refresh: (address, shardIds) =>
-      sql`UPDATE ${locksTableSql} SET acquired_at = ${sqlNow} WHERE address = ${address} AND ${
-        sql.in("shard_id", shardIds)
-      }`.pipe(PersistenceError.refail),
+      sql.onDialectOrElse({
+        mysql: () =>
+          sql`UPDATE ${locksTableSql} SET acquired_at = ${sqlNow} WHERE address = ${address} AND ${
+            sql.in("shard_id", shardIds)
+          }`.pipe(
+            Effect.andThen(
+              sql`SELECT shard_id FROM ${locksTableSql} WHERE address = ${address} AND acquired_at >= ${lessThan120SecondsAgo}`
+                .values
+            )
+          ),
+        pg: () =>
+          sql`UPDATE ${locksTableSql} SET acquired_at = ${sqlNow} WHERE address = ${address} AND ${
+            sql.in("shard_id", shardIds)
+          } RETURNING shard_id`.values,
+        mssql: () =>
+          sql`UPDATE ${locksTableSql} SET acquired_at = ${sqlNow} OUTPUT inserted.shard_id WHERE address = ${address} AND ${
+            sql.in("shard_id", shardIds)
+          }`.values,
+        orElse: () =>
+          // sqlite
+          sql`UPDATE ${locksTableSql} SET acquired_at = ${sqlNow} WHERE address = ${address} AND ${
+            sql.in("shard_id", shardIds)
+          }`.pipe(
+            Effect.andThen(
+              sql`SELECT shard_id FROM ${locksTableSql} WHERE address = ${address} AND acquired_at >= ${lessThan120SecondsAgo}`
+                .values
+            )
+          )
+      }).pipe(
+        Effect.map((rows) => rows.map((row) => Number(row[0]))),
+        PersistenceError.refail
+      ),
 
     release: (address, shardId) =>
       sql`DELETE FROM ${locksTableSql} WHERE address = ${address} AND shard_id = ${shardId}`.pipe(

@@ -200,7 +200,8 @@ export const make = Effect.fnUntraced(function*<
               Effect.forkIn(managerScope),
               Effect.andThen(Effect.annotateLogs(Effect.logError("Defect in entity", Cause.die(response.defect)), {
                 module: "EntityManager",
-                address
+                address,
+                pod: options.podAddress
               }))
             )
           }

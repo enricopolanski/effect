@@ -63,12 +63,19 @@ describe("SqlMessageStorage", () => {
           acquired = yield* storage.acquire(podAddress1, [1, 2, 3] as any)
           expect(acquired).toEqual([1, 2, 3])
 
+          let refreshed = yield* storage.refresh(podAddress1, [1, 2, 3] as any)
+          expect(refreshed).toEqual([1, 2, 3])
+
           acquired = yield* storage.acquire(podAddress2, [1, 2, 3] as any)
           expect(acquired).toEqual([])
 
           yield* storage.release(podAddress1, ShardId.make(1))
           acquired = yield* storage.acquire(podAddress2, [1, 2, 3] as any)
           expect(acquired).toEqual([1])
+          refreshed = yield* storage.refresh(podAddress1, [1, 2, 3] as any)
+          expect(refreshed).toEqual([2, 3])
+          refreshed = yield* storage.refresh(podAddress2, [1, 2, 3] as any)
+          expect(refreshed).toEqual([1])
 
           acquired = yield* storage.acquire(podAddress1, [1, 2, 3] as any)
           expect(acquired).toEqual([2, 3])

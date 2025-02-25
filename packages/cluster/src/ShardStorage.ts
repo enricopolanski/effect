@@ -60,7 +60,7 @@ export class ShardStorage extends Context.Tag("@effect/cluster/ShardStorage")<Sh
   readonly refresh: (
     address: PodAddress,
     shardIds: Iterable<ShardId>
-  ) => Effect.Effect<void, PersistenceError>
+  ) => Effect.Effect<Array<ShardId>, PersistenceError>
 
   /**
    * Release the given shard ids.
@@ -127,7 +127,7 @@ export interface Encoded {
   readonly refresh: (
     address: string,
     shardIds: ReadonlyArray<number>
-  ) => Effect.Effect<void, PersistenceError>
+  ) => Effect.Effect<Array<number>, PersistenceError>
 
   /**
    * Release the lock on the given shards.
@@ -183,7 +183,7 @@ export const makeEncoded = Effect.fnUntraced(function*(encoded: Encoded) {
         Array<ShardId>,
         PersistenceError
       >,
-    refresh: (address, shardIds) => encoded.refresh(encodePodAddress(address), Array.from(shardIds)),
+    refresh: (address, shardIds) => encoded.refresh(encodePodAddress(address), Array.from(shardIds)) as any,
     release: Effect.fnUntraced(function*(address, shardId) {
       activeShards.delete(shardId)
       yield* encoded.release(encodePodAddress(address), shardId).pipe(
@@ -201,18 +201,24 @@ export const makeEncoded = Effect.fnUntraced(function*(encoded: Encoded) {
  * @since 1.0.0
  * @category layers
  */
-export const layerNoop: Layer.Layer<ShardStorage> = Layer.succeed(
+export const layerNoop: Layer.Layer<ShardStorage> = Layer.sync(
   ShardStorage,
-  ShardStorage.of({
-    getAssignments: Effect.succeed(new Map()),
-    saveAssignments: () => Effect.void,
-    getPods: Effect.sync(() => []),
-    savePods: () => Effect.void,
-    acquire: (_address, shards) => Effect.succeed(Array.from(shards)),
-    refresh: () => Effect.void,
-    release: () => Effect.void,
-    releaseAll: () => Effect.void
-  })
+  () => {
+    let acquired: Array<ShardId> = []
+    return ShardStorage.of({
+      getAssignments: Effect.succeed(new Map()),
+      saveAssignments: () => Effect.void,
+      getPods: Effect.sync(() => []),
+      savePods: () => Effect.void,
+      acquire: (_address, shards) => {
+        acquired = Array.from(shards)
+        return Effect.succeed(Array.from(shards))
+      },
+      refresh: () => Effect.sync(() => acquired),
+      release: () => Effect.void,
+      releaseAll: () => Effect.void
+    })
+  }
 )
 
 /**
@@ -239,13 +245,18 @@ export const makeMemory = Effect.gen(function*() {
     })
   }
 
+  let acquired: Array<ShardId> = []
+
   return ShardStorage.of({
     getAssignments: Effect.sync(() => new Map(assignments)),
     saveAssignments,
     getPods: Effect.sync(() => Array.from(pods)),
     savePods,
-    acquire: (_address, shardIds) => Effect.succeed(Array.from(shardIds)),
-    refresh: () => Effect.void,
+    acquire: (_address, shardIds) => {
+      acquired = Array.from(shardIds)
+      return Effect.succeed(Array.from(shardIds))
+    },
+    refresh: () => Effect.sync(() => acquired),
     release: () => Effect.void,
     releaseAll: () => Effect.void
   })

@@ -217,6 +217,7 @@ export const make = Effect.gen(function*() {
           continue
         }
 
+        yield* Effect.log("Acquiring shards", unacquiredShards)
         const acquired = yield* shardStorage.acquire(selfAddress, unacquiredShards)
         for (const shardId of acquired) {
           acquiredShards.add(shardId)
@@ -247,6 +248,15 @@ export const make = Effect.gen(function*() {
         ...releasingShards
       ])
     ).pipe(
+      Effect.flatMap((acquired) => {
+        for (const shardId of acquiredShards) {
+          if (!acquired.includes(shardId)) {
+            acquiredShards.delete(shardId)
+            releasingShards.add(shardId)
+          }
+        }
+        return releasingShards.size > 0 ? releaseShards : Effect.void
+      }),
       Effect.retry({
         times: 5,
         schedule: Schedule.spaced(250)
@@ -262,23 +272,31 @@ export const make = Effect.gen(function*() {
       Effect.forkIn(shardingScope)
     )
 
-    const releaseShards = Effect.suspend(() =>
-      Effect.forEach(
-        releasingShards,
-        (shardId) =>
+    const releaseShardsLock = Effect.unsafeMakeSemaphore(1).withPermits(1)
+    const releaseShards = releaseShardsLock(Effect.suspend(() =>
+      Effect.log("Releasing shards", releasingShards).pipe(
+        Effect.annotateLogs({
+          pod: selfAddress
+        }),
+        Effect.andThen(
           Effect.forEach(
-            entityManagers.values(),
-            (state) => state.manager.interruptShard(shardId),
+            releasingShards,
+            (shardId) =>
+              Effect.forEach(
+                entityManagers.values(),
+                (state) => state.manager.interruptShard(shardId),
+                { concurrency: "unbounded", discard: true }
+              ).pipe(
+                Effect.andThen(shardStorage.release(selfAddress, shardId)),
+                Effect.andThen(() => {
+                  releasingShards.delete(shardId)
+                })
+              ),
             { concurrency: "unbounded", discard: true }
-          ).pipe(
-            Effect.andThen(shardStorage.release(selfAddress, shardId)),
-            Effect.andThen(() => {
-              releasingShards.delete(shardId)
-            })
-          ),
-        { concurrency: "unbounded", discard: true }
+          )
+        )
       )
-    )
+    ))
   }
 
   const clearSelfShards = Effect.suspend(() => {
