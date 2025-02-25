@@ -151,36 +151,24 @@ export const updateManyAs: {
   (
     options: {
       readonly forkAs?: FiberId.Single | undefined
-      readonly entries: readonly [
+      readonly entries: Arr.NonEmptyReadonlyArray<
         readonly [
           FiberRef.FiberRef<any>,
-          readonly [readonly [FiberId.Single, any], ...Array<readonly [FiberId.Single, any]>]
-        ],
-        ...Array<
-          readonly [
-            FiberRef.FiberRef<any>,
-            readonly [readonly [FiberId.Single, any], ...Array<readonly [FiberId.Single, any]>]
-          ]
-        >
-      ]
+          Arr.NonEmptyReadonlyArray<readonly [FiberId.Single, any]>
+        ]
+      >
     }
   ): (self: FiberRefs) => FiberRefs
   (
     self: FiberRefs,
     options: {
       readonly forkAs?: FiberId.Single | undefined
-      readonly entries: readonly [
+      readonly entries: Arr.NonEmptyReadonlyArray<
         readonly [
           FiberRef.FiberRef<any>,
-          readonly [readonly [FiberId.Single, any], ...Array<readonly [FiberId.Single, any]>]
-        ],
-        ...Array<
-          readonly [
-            FiberRef.FiberRef<any>,
-            readonly [readonly [FiberId.Single, any], ...Array<readonly [FiberId.Single, any]>]
-          ]
-        >
-      ]
+          Arr.NonEmptyReadonlyArray<readonly [FiberId.Single, any]>
+        ]
+      >
     }
   ): FiberRefs
 } = internal.updateManyAs

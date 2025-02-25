@@ -35,13 +35,13 @@ export interface ReadonlyArrayTypeLambda extends TypeLambda {
  * @category models
  * @since 2.0.0
  */
-export type NonEmptyReadonlyArray<A> = readonly [A, ...Array<A>]
+export type NonEmptyReadonlyArray<A> = readonly [A, ...Array<A>] | readonly [...Array<A>, A]
 
 /**
  * @category models
  * @since 2.0.0
  */
-export type NonEmptyArray<A> = [A, ...Array<A>]
+export type NonEmptyArray<A> = [A, ...Array<A>] | [...Array<A>, A]
 
 /**
  * Builds a `NonEmptyArray` from an non-empty collection of elements.

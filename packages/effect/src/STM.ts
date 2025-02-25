@@ -1,6 +1,7 @@
 /**
  * @since 2.0.0
  */
+import type { NonEmptyArray } from "./Array.js"
 import * as Cause from "./Cause.js"
 import * as Chunk from "./Chunk.js"
 import type * as Context from "./Context.js"
@@ -1872,8 +1873,8 @@ export {
  * @category mutations
  */
 export const validateAll: {
-  <A, B, E, R>(f: (a: A) => STM<B, E, R>): (elements: Iterable<A>) => STM<Array<B>, [E, ...Array<E>], R>
-  <A, B, E, R>(elements: Iterable<A>, f: (a: A) => STM<B, E, R>): STM<Array<B>, [E, ...Array<E>], R>
+  <A, B, E, R>(f: (a: A) => STM<B, E, R>): (elements: Iterable<A>) => STM<Array<B>, NonEmptyArray<E>, R>
+  <A, B, E, R>(elements: Iterable<A>, f: (a: A) => STM<B, E, R>): STM<Array<B>, NonEmptyArray<E>, R>
 } = stm.validateAll
 
 /**

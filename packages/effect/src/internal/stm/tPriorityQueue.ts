@@ -1,4 +1,5 @@
 import * as Arr from "../../Array.js"
+import type { NonEmptyArray } from "../../Array.js"
 import * as Chunk from "../../Chunk.js"
 import { dual, pipe } from "../../Function.js"
 import * as Option from "../../Option.js"
@@ -58,7 +59,7 @@ export const fromIterable =
                 )
               )
             ),
-          SortedMap.empty<A, [A, ...Array<A>]>(order)
+          SortedMap.empty<A, NonEmptyArray<A>>(order)
         )
       ),
       core.map((ref) => new TPriorityQueueImpl(ref))

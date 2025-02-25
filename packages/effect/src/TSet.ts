@@ -1,6 +1,7 @@
 /**
  * @since 2.0.0
  */
+import type { NonEmptyArray } from "./Array.js"
 import type * as Chunk from "./Chunk.js"
 import type * as HashSet from "./HashSet.js"
 import * as internal from "./internal/stm/tSet.js"
@@ -283,8 +284,8 @@ export const takeFirstSTM: {
  * @category mutations
  */
 export const takeSome: {
-  <A, B>(pf: (a: A) => Option.Option<B>): (self: TSet<A>) => STM.STM<[B, ...Array<B>]>
-  <A, B>(self: TSet<A>, pf: (a: A) => Option.Option<B>): STM.STM<[B, ...Array<B>]>
+  <A, B>(pf: (a: A) => Option.Option<B>): (self: TSet<A>) => STM.STM<NonEmptyArray<B>>
+  <A, B>(self: TSet<A>, pf: (a: A) => Option.Option<B>): STM.STM<NonEmptyArray<B>>
 } = internal.takeSome
 
 /**
@@ -294,8 +295,8 @@ export const takeSome: {
  * @category mutations
  */
 export const takeSomeSTM: {
-  <A, B, E, R>(pf: (a: A) => STM.STM<B, Option.Option<E>, R>): (self: TSet<A>) => STM.STM<[B, ...Array<B>], E, R>
-  <A, B, E, R>(self: TSet<A>, pf: (a: A) => STM.STM<B, Option.Option<E>, R>): STM.STM<[B, ...Array<B>], E, R>
+  <A, B, E, R>(pf: (a: A) => STM.STM<B, Option.Option<E>, R>): (self: TSet<A>) => STM.STM<NonEmptyArray<B>, E, R>
+  <A, B, E, R>(self: TSet<A>, pf: (a: A) => STM.STM<B, Option.Option<E>, R>): STM.STM<NonEmptyArray<B>, E, R>
 } = internal.takeSomeSTM
 
 /**

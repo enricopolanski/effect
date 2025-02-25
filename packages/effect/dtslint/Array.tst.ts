@@ -2,6 +2,7 @@ import type { Order } from "effect"
 import { Array, Effect, Either, Option, Predicate } from "effect"
 import { hole, identity, pipe } from "effect/Function"
 import { describe, expect, it } from "tstyche"
+import type { NonEmptyArray, NonEmptyReadonlyArray } from "../src/Array.js"
 
 declare const nonEmptyReadonlyStrings: Array.NonEmptyReadonlyArray<string>
 declare const nonEmptyNumbers: Array.NonEmptyArray<number>
@@ -67,11 +68,11 @@ describe("Array", () => {
 
   it("isNonEmptyReadonlyArray", () => {
     if (Array.isNonEmptyReadonlyArray(readonlyNumbers)) {
-      expect(readonlyNumbers).type.toBe<readonly [number, ...Array<number>]>()
+      expect(readonlyNumbers).type.toBe<NonEmptyReadonlyArray<number>>()
     }
     // should play well with `Option.liftPredicate`
     expect(Option.liftPredicate(Array.isNonEmptyReadonlyArray)).type.toBe<
-      <A>(a: ReadonlyArray<A>) => Option.Option<readonly [A, ...Array<A>]>
+      <A>(a: ReadonlyArray<A>) => Option.Option<NonEmptyReadonlyArray<A>>
     >()
   })
 
@@ -229,9 +230,9 @@ describe("Array", () => {
     expect(Array.sort(ABs, orderA)).type.toBe<Array<AB>>()
     expect(pipe(ABs, Array.sort(orderA))).type.toBe<Array<AB>>()
     expect(Array.sort(orderA)(ABs)).type.toBe<Array<AB>>()
-    expect(Array.sort(nonEmptyABs, orderA)).type.toBe<[AB, ...Array<AB>]>()
-    expect(pipe(nonEmptyABs, Array.sort(orderA))).type.toBe<[AB, ...Array<AB>]>()
-    expect(Array.sort(orderA)(nonEmptyABs)).type.toBe<[AB, ...Array<AB>]>()
+    expect(Array.sort(nonEmptyABs, orderA)).type.toBe<NonEmptyArray<AB>>()
+    expect(pipe(nonEmptyABs, Array.sort(orderA))).type.toBe<NonEmptyArray<AB>>()
+    expect(Array.sort(orderA)(nonEmptyABs)).type.toBe<NonEmptyArray<AB>>()
 
     // @ts-expect-error: wrong `Order` type
     pipe([1], Array.sort(Order.string))

@@ -1,6 +1,7 @@
 /**
  * @since 2.0.0
  */
+import type { NonEmptyArray } from "./Array.js"
 import type * as Chunk from "./Chunk.js"
 import type { LazyArg } from "./Function.js"
 import type * as HashMap from "./HashMap.js"
@@ -388,8 +389,8 @@ export const takeFirstSTM: {
  * @category mutations
  */
 export const takeSome: {
-  <K, V, A>(pf: (key: K, value: V) => Option.Option<A>): (self: TMap<K, V>) => STM.STM<[A, ...Array<A>]>
-  <K, V, A>(self: TMap<K, V>, pf: (key: K, value: V) => Option.Option<A>): STM.STM<[A, ...Array<A>]>
+  <K, V, A>(pf: (key: K, value: V) => Option.Option<A>): (self: TMap<K, V>) => STM.STM<NonEmptyArray<A>>
+  <K, V, A>(self: TMap<K, V>, pf: (key: K, value: V) => Option.Option<A>): STM.STM<NonEmptyArray<A>>
 } = internal.takeSome
 
 /**
@@ -401,11 +402,11 @@ export const takeSome: {
 export const takeSomeSTM: {
   <K, V, A, E, R>(
     pf: (key: K, value: V) => STM.STM<A, Option.Option<E>, R>
-  ): (self: TMap<K, V>) => STM.STM<[A, ...Array<A>], E, R>
+  ): (self: TMap<K, V>) => STM.STM<NonEmptyArray<A>, E, R>
   <K, V, A, E, R>(
     self: TMap<K, V>,
     pf: (key: K, value: V) => STM.STM<A, Option.Option<E>, R>
-  ): STM.STM<[A, ...Array<A>], E, R>
+  ): STM.STM<NonEmptyArray<A>, E, R>
 } = internal.takeSomeSTM
 
 /**
