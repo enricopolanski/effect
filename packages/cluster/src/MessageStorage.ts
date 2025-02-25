@@ -202,7 +202,7 @@ export type Encoded = {
    * Retrieves the unprocessed messages by id.
    */
   readonly unprocessedMessagesById: (
-    messageIds: Iterable<Snowflake.Snowflake>
+    messageIds: ReadonlyArray<Snowflake.Snowflake>
   ) => Effect.Effect<
     Array<{
       readonly envelope: Envelope.Envelope.Encoded
@@ -322,10 +322,15 @@ export const makeEncoded: (encoded: Encoded) => Effect.Effect<
       const encodedReplies = yield* encoded.repliesFor(requestIds)
       return yield* decodeReplies(map, encodedReplies)
     }),
-    unprocessedMessages: (shardIds) =>
-      Effect.flatMap(encoded.unprocessedMessages(Array.from(shardIds)), decodeMessages),
+    unprocessedMessages: (shardIds) => {
+      const shards = Array.from(shardIds)
+      if (shards.length === 0) return Effect.succeed([])
+      return Effect.flatMap(encoded.unprocessedMessages(shards), decodeMessages)
+    },
     unprocessedMessagesById(messageIds) {
-      return Effect.flatMap(encoded.unprocessedMessagesById(messageIds), decodeMessages)
+      const ids = Array.from(messageIds)
+      if (ids.length === 0) return Effect.succeed([])
+      return Effect.flatMap(encoded.unprocessedMessagesById(ids), decodeMessages)
     },
     resetAddress: (address) => encoded.resetAddress(address)
   })
