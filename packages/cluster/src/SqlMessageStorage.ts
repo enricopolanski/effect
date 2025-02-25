@@ -598,7 +598,7 @@ export const make = Effect.fnUntraced(function*(options?: {
           sql`UPDATE ${messagesTableSql} SET last_reply_id = ${reply.id} WHERE id = ${reply.requestId}` :
           sql`UPDATE ${messagesTableSql} SET processed = ${sqlTrue} WHERE id = ${reply.requestId} OR request_id = ${reply.requestId}`
         return insert.pipe(
-          Effect.andThen(update),
+          Effect.andThen(update.unprepared),
           sql.withTransaction
         )
       }).pipe(
@@ -623,7 +623,7 @@ export const make = Effect.fnUntraced(function*(options?: {
           )
         )
         ORDER BY id ASC
-      `.pipe(
+      `.unprepared.pipe(
         Effect.provideService(SqlClient.SafeIntegers, true),
         Effect.map(Arr.map((row): Reply.ReplyEncoded<any> =>
           row.kind === replyKind.WithExit ?
@@ -682,8 +682,8 @@ export const make = Effect.fnUntraced(function*(options?: {
         }
 
         const rows = statements.length === 1
-          ? yield* statements[0]
-          : yield* sql<MessageJoinRow>`(${statements[0]}) UNION ALL (${statements[1]})`
+          ? yield* statements[0].unprepared
+          : yield* sql<MessageJoinRow>`(${statements[0]}) UNION ALL (${statements[1]})`.unprepared
         const messages: Array<{
           readonly envelope: Envelope.Envelope.Encoded
           readonly lastSentReply: Option.Option<Reply.ReplyEncoded<any>>
@@ -709,7 +709,7 @@ export const make = Effect.fnUntraced(function*(options?: {
         LEFT JOIN ${repliesTableSql} r ON r.id = m.last_reply_id
         WHERE m.id IN (${sql.literal(idArr.join(","))}) AND m.processed = ${sqlFalse}
         ORDER BY m.sequence ASC
-      `.pipe(
+      `.unprepared.pipe(
         Effect.map(Arr.map(messageFromRow)),
         Effect.provideService(SqlClient.SafeIntegers, true),
         PersistenceError.refail
