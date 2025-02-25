@@ -148,7 +148,7 @@ export const makeGenerator: Effect.Effect<
   const config = yield* ShardingConfig
   const machineId = Option.match(config.podAddress, {
     onNone: () => Math.floor(Math.random() * 1024),
-    onSome: (podAddress) => Math.abs(hashString(podAddress.toString())) % 1024
+    onSome: (podAddress) => Math.abs(hashString(`${podAddress.host}:${podAddress.port}`)) % 1024
   })
   const clock = yield* Effect.clock
 
@@ -176,7 +176,7 @@ export const makeGenerator: Effect.Effect<
       return make({
         machineId,
         sequence: sequence++,
-        timestamp: clock.unsafeCurrentTimeMillis()
+        timestamp: sequenceAt
       })
     }
   })
