@@ -298,7 +298,7 @@ export const make = Effect.gen(function*() {
       const scope = yield* Scope.make()
       const manager = yield* EntityManager.make(entity, build, {
         ...options,
-        storageEnabled,
+        storage,
         podAddress: Option.getOrThrow(config.podAddress),
         sharding
       }).pipe(
@@ -398,7 +398,6 @@ export const make = Effect.gen(function*() {
 
   if (storageEnabled && Option.isSome(config.podAddress)) {
     const selfAddress = config.podAddress.value
-    const sessionKey = {}
 
     yield* Effect.gen(function*() {
       yield* Effect.logDebug("Starting")
@@ -417,7 +416,7 @@ export const make = Effect.gen(function*() {
         // acquired.
         yield* storageReadLock.take(1)
 
-        const messages = yield* storage.unprocessedMessages(acquiredShards, sessionKey)
+        const messages = yield* storage.unprocessedMessages(acquiredShards)
 
         const send = Effect.catchAllCause(
           Effect.suspend(() => {
@@ -428,10 +427,14 @@ export const make = Effect.gen(function*() {
               return Effect.void
             }
 
+            const isProcessing = state.manager.isProcessingFor(message)
+
             // If the message might affect a currently processing request, we
             // send it to the entity manager to be processed.
-            if (message._tag === "IncomingEnvelope" && state.manager.isProcessingFor(message)) {
+            if (message._tag === "IncomingEnvelope" && isProcessing) {
               return state.manager.send(message)
+            } else if (isProcessing) {
+              return Effect.void
             }
 
             // If the entity was resuming in another fiber, we add the message

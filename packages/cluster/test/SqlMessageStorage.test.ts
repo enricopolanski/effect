@@ -45,7 +45,7 @@ describe("SqlMessageStorage", () => {
           result = yield* storage.saveRequest(request)
           expect(result._tag).toEqual("Duplicate")
 
-          const messages = yield* storage.unprocessedMessages([request.envelope.address.shardId], {})
+          const messages = yield* storage.unprocessedMessages([request.envelope.address.shardId])
           expect(messages).toHaveLength(1)
         }))
 
@@ -98,20 +98,19 @@ describe("SqlMessageStorage", () => {
           expect(result._tag).toEqual("Duplicate")
         }))
 
-      it.effect("unprocessedMessages sessionKey", () =>
+      it.effect("unprocessedMessages", () =>
         Effect.gen(function*() {
           yield* truncate
 
           const storage = yield* MessageStorage.MessageStorage
           const request = yield* makeRequest()
           yield* storage.saveRequest(request)
-          const sessionKey = {}
-          let messages = yield* storage.unprocessedMessages([request.envelope.address.shardId], sessionKey)
+          let messages = yield* storage.unprocessedMessages([request.envelope.address.shardId])
           expect(messages).toHaveLength(1)
-          messages = yield* storage.unprocessedMessages([request.envelope.address.shardId], sessionKey)
+          messages = yield* storage.unprocessedMessages([request.envelope.address.shardId])
           expect(messages).toHaveLength(0)
           yield* storage.saveRequest(yield* makeRequest())
-          messages = yield* storage.unprocessedMessages([request.envelope.address.shardId], sessionKey)
+          messages = yield* storage.unprocessedMessages([request.envelope.address.shardId])
           expect(messages).toHaveLength(1)
         }))
 
@@ -123,8 +122,7 @@ describe("SqlMessageStorage", () => {
           const request = yield* makeRequest()
           yield* storage.saveRequest(request)
           yield* storage.saveReply(yield* makeReply(request))
-          const sessionKey = {}
-          const messages = yield* storage.unprocessedMessages([request.envelope.address.shardId], sessionKey)
+          const messages = yield* storage.unprocessedMessages([request.envelope.address.shardId])
           expect(messages).toHaveLength(0)
         }))
 

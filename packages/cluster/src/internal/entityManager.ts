@@ -24,6 +24,7 @@ import type { EntityAddress } from "../EntityAddress.js"
 import type { EntityId } from "../EntityId.js"
 import * as Envelope from "../Envelope.js"
 import * as Message from "../Message.js"
+import * as MessageStorage from "../MessageStorage.js"
 import type { PodAddress } from "../PodAddress.js"
 import * as Reply from "../Reply.js"
 import type { ShardId } from "../ShardId.js"
@@ -43,7 +44,7 @@ export interface EntityManager {
     message: Message.Incoming<any>
   ) => Effect.Effect<void, EntityNotManagedByPod | MailboxFull | AlreadyProcessingMessage>
 
-  readonly isProcessingFor: (message: Message.IncomingEnvelope) => boolean
+  readonly isProcessingFor: (message: Message.Incoming<any>) => boolean
 
   readonly interruptShard: (shardId: ShardId) => Effect.Effect<void>
 }
@@ -73,7 +74,7 @@ export const make = Effect.fnUntraced(function*<
   buildHandlers: Effect.Effect<Handlers, never, RX>,
   options: {
     readonly sharding: Sharding["Type"]
-    readonly storageEnabled: boolean
+    readonly storage: MessageStorage.MessageStorage["Type"]
     readonly podAddress: PodAddress
     readonly maxIdleTime?: DurationInput | undefined
     readonly concurrency?: number | "unbounded" | undefined
@@ -83,6 +84,7 @@ export const make = Effect.fnUntraced(function*<
   const config = yield* ShardingConfig
   const snowflakeGen = yield* Snowflake.Generator
   const managerScope = yield* Effect.scope
+  const storageEnabled = options.storage !== MessageStorage.noop
   const mailboxCapacity = options.mailboxCapacity ?? config.entityMailboxCapacity
   const clock = yield* Effect.clock
   const context = yield* Effect.context<Rpc.Context<Rpcs> | Rpc.Middleware<Rpcs> | RX>()
@@ -119,25 +121,18 @@ export const make = Effect.fnUntraced(function*<
           case "Exit": {
             const request = state.activeRequests.get(response.requestId)
             if (!request) return Effect.void
-            state.activeRequests.delete(response.requestId)
-
-            // ensure that the reaper does not remove the entity as we haven't
-            // been "idle" yet
-            if (state.activeRequests.size === 0) {
-              state.lastActiveCheck = clock.unsafeCurrentTimeMillis()
-            }
 
             // For durable messages, ignore interrupts during shutdown.
             // They will be retried when the entity is restarted.
             if (
-              options.storageEnabled &&
+              storageEnabled &&
               isShuttingDown &&
               Context.get(request.rpc.annotations, Persisted) &&
               Exit.isInterrupted(response.exit)
             ) {
               return Effect.void
             }
-            return Effect.orDie(retryRespond(
+            return retryRespond(
               4,
               Effect.suspend(() =>
                 request.message.respond(
@@ -148,7 +143,20 @@ export const make = Effect.fnUntraced(function*<
                   })
                 )
               )
-            ))
+            ).pipe(
+              Effect.flatMap(() => {
+                state.activeRequests.delete(response.requestId)
+
+                // ensure that the reaper does not remove the entity as we haven't
+                // been "idle" yet
+                if (state.activeRequests.size === 0) {
+                  state.lastActiveCheck = clock.unsafeCurrentTimeMillis()
+                }
+
+                return Effect.void
+              }),
+              Effect.orDie
+            )
           }
           case "Chunk": {
             const request = state.activeRequests.get(response.requestId)
@@ -170,6 +178,8 @@ export const make = Effect.fnUntraced(function*<
             ))
           }
           case "Defect": {
+            isShuttingDown = true
+
             const exit = Exit.die(response.defect)
             const requests = Array.from(state.activeRequests.values())
             state.activeRequests.clear()
@@ -185,8 +195,9 @@ export const make = Effect.fnUntraced(function*<
                 )),
               { discard: true }
             ).pipe(
+              Effect.ensuring(Effect.ignore(options.storage.resetAddress(address))),
+              Effect.ensuring(entities.remove(address)),
               Effect.forkIn(managerScope),
-              Effect.andThen(entities.remove(address)),
               Effect.andThen(Effect.annotateLogs(Effect.logError("Defect in entity", Cause.die(response.defect)), {
                 module: "EntityManager",
                 address
@@ -224,6 +235,8 @@ export const make = Effect.fnUntraced(function*<
       activeRequests: new Map(),
       lastActiveCheck: clock.unsafeCurrentTimeMillis()
     }
+
+    yield* Effect.ignore(options.storage.resetAddress(address))
 
     // add servers to map for expiration check
     yield* Scope.addFinalizer(

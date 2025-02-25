@@ -28,7 +28,7 @@ describe("MessageStorage", () => {
         const request = yield* makeRequest()
         const result = yield* storage.saveRequest(request)
         expect(result._tag).toEqual("Success")
-        const messages = yield* storage.unprocessedMessages([request.envelope.address.shardId], {})
+        const messages = yield* storage.unprocessedMessages([request.envelope.address.shardId])
         expect(messages).toHaveLength(1)
       }).pipe(Effect.provide(MemoryLive)))
 
@@ -50,29 +50,13 @@ describe("MessageStorage", () => {
         expect(result._tag).toEqual("Duplicate")
       }).pipe(Effect.provide(MemoryLive)))
 
-    it.effect("unprocessedMessages sessionKey", () =>
-      Effect.gen(function*() {
-        const storage = yield* MessageStorage.MessageStorage
-        const request = yield* makeRequest()
-        yield* storage.saveRequest(request)
-        const sessionKey = {}
-        let messages = yield* storage.unprocessedMessages([request.envelope.address.shardId], sessionKey)
-        expect(messages).toHaveLength(1)
-        messages = yield* storage.unprocessedMessages([request.envelope.address.shardId], sessionKey)
-        expect(messages).toHaveLength(0)
-        yield* storage.saveRequest(yield* makeRequest())
-        messages = yield* storage.unprocessedMessages([request.envelope.address.shardId], sessionKey)
-        expect(messages).toHaveLength(1)
-      }).pipe(Effect.provide(MemoryLive)))
-
     it.effect("unprocessedMessages excludes complete requests", () =>
       Effect.gen(function*() {
         const storage = yield* MessageStorage.MessageStorage
         const request = yield* makeRequest()
         yield* storage.saveRequest(request)
         yield* storage.saveReply(yield* makeReply(request))
-        const sessionKey = {}
-        const messages = yield* storage.unprocessedMessages([request.envelope.address.shardId], sessionKey)
+        const messages = yield* storage.unprocessedMessages([request.envelope.address.shardId])
         expect(messages).toHaveLength(0)
       }).pipe(Effect.provide(MemoryLive)))
 

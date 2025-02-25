@@ -17,6 +17,7 @@ import type { Predicate } from "effect/Predicate"
 import * as Schema from "effect/Schema"
 import type { PersistenceError } from "./ClusterError.js"
 import { MalformedMessage } from "./ClusterError.js"
+import type { EntityAddress } from "./EntityAddress.js"
 import * as Envelope from "./Envelope.js"
 import * as Message from "./Message.js"
 import * as Reply from "./Reply.js"
@@ -67,13 +68,9 @@ export class MessageStorage extends Context.Tag("@effect/cluster/MessageStorage"
 
   /**
    * Retrieves the unprocessed messages for the specified shards.
-   *
-   * The `sessionKey` parameter is used to ensure the same message is only ever
-   * delivered once to the same session.
    */
   readonly unprocessedMessages: (
-    shardIds: Iterable<ShardId>,
-    sessionKey: object
+    shardIds: Iterable<ShardId>
   ) => Effect.Effect<Array<Message.Incoming<any>>, PersistenceError>
 
   /**
@@ -82,6 +79,13 @@ export class MessageStorage extends Context.Tag("@effect/cluster/MessageStorage"
   readonly unprocessedMessagesById: <R extends Rpc.Any>(
     messageIds: Iterable<Snowflake.Snowflake>
   ) => Effect.Effect<Array<Message.Incoming<R>>, PersistenceError>
+
+  /**
+   * Reset the mailbox state for the provided address.
+   */
+  readonly resetAddress: (
+    address: EntityAddress
+  ) => Effect.Effect<void, PersistenceError>
 }>() {}
 
 /**
@@ -182,27 +186,15 @@ export type Encoded = {
   >
 
   /**
-   * Retrieves the unprocessed messages for the given options.
-   *
-   * Unprocessed messages are:
-   *
-   * - For new shards, any requests without a "WithExit" reply.
-   * - For new shards, any interrupts for unprocessed requests.
-   * - For new shards, no "AckChunk" messages.
-   *
-   * - For existing shards, all messages without an "WithExit" reply after the
-   *   cursor.
+   * Retrieves the unprocessed messages for the given shards.
    */
   readonly unprocessedMessages: (
-    options: EncodedUnprocessedOptions<any>
+    shardIds: ReadonlyArray<number>
   ) => Effect.Effect<
-    readonly [
-      messages: Array<{
-        readonly envelope: Envelope.Envelope.Encoded
-        readonly lastSentReply: Option.Option<Reply.ReplyEncoded<any>>
-      }>,
-      cursor: Option.Option<any>
-    ],
+    Array<{
+      readonly envelope: Envelope.Envelope.Encoded
+      readonly lastSentReply: Option.Option<Reply.ReplyEncoded<any>>
+    }>,
     PersistenceError
   >
 
@@ -218,6 +210,13 @@ export type Encoded = {
     }>,
     PersistenceError
   >
+
+  /**
+   * Reset the mailbox state for the provided address.
+   */
+  readonly resetAddress: (
+    address: EntityAddress
+  ) => Effect.Effect<void, PersistenceError>
 }
 
 /**
@@ -282,10 +281,6 @@ export const makeEncoded: (encoded: Encoded) => Effect.Effect<
   Snowflake.Generator
 > = Effect.fnUntraced(function*(encoded: Encoded) {
   const snowflakeGen = yield* Snowflake.Generator
-  const cursors = new WeakMap<object, {
-    shardIds: Set<ShardId>
-    cursor: Option.Option<any>
-  }>()
 
   const storage: MessageStorage["Type"] = yield* make({
     saveRequest: (message) =>
@@ -327,47 +322,15 @@ export const makeEncoded: (encoded: Encoded) => Effect.Effect<
       const encodedReplies = yield* encoded.repliesFor(requestIds)
       return yield* decodeReplies(map, encodedReplies)
     }),
-    unprocessedMessages: Effect.fnUntraced(function*(shardIds, sessionKey) {
-      const meta = cursors.get(sessionKey)
-      if (!meta) {
-        const newShards = Array.from(shardIds)
-        const [messages, cursor] = yield* encoded.unprocessedMessages({
-          existingShards: [],
-          newShards,
-          cursor: Option.none()
-        })
-        const decoded = yield* decodeMessages(messages)
-        cursors.set(sessionKey, { shardIds: new Set(newShards), cursor })
-        return decoded
-      }
-      const nextShards = new Set<ShardId>()
-      const existingShards = Arr.empty<ShardId>()
-      const newShards = Arr.empty<ShardId>()
-      for (const shardId of shardIds) {
-        nextShards.add(shardId)
-        if (meta.shardIds.has(shardId)) {
-          existingShards.push(shardId)
-        } else {
-          newShards.push(shardId)
-        }
-      }
-      const [messages, cursor] = yield* encoded.unprocessedMessages({
-        existingShards,
-        newShards,
-        cursor: meta.cursor
-      })
-      const decoded = yield* decodeMessages(messages)
-      meta.shardIds = nextShards
-      meta.cursor = cursor
-      return decoded
-    }),
+    unprocessedMessages: (shardIds) =>
+      Effect.flatMap(encoded.unprocessedMessages(Array.from(shardIds)), decodeMessages),
     unprocessedMessagesById(messageIds) {
       return Effect.flatMap(encoded.unprocessedMessagesById(messageIds), decodeMessages)
-    }
+    },
+    resetAddress: (address) => encoded.resetAddress(address)
   })
 
-  const saveReply = (reply: Reply.ReplyWithContext<any>) =>
-    Effect.catchTag(storage.saveReply(reply), "PersistenceError", Effect.die)
+  const saveReply = (reply: Reply.ReplyWithContext<any>) => storage.saveReply(reply)
 
   const decodeMessages = (
     envelopes: Array<{
@@ -483,7 +446,8 @@ export const noop: MessageStorage["Type"] = globalValue(
       saveReply: () => Effect.void,
       repliesFor: () => Effect.succeed([]),
       unprocessedMessages: () => Effect.succeed([]),
-      unprocessedMessagesById: () => Effect.succeed([])
+      unprocessedMessagesById: () => Effect.succeed([]),
+      resetAddress: () => Effect.void
     }))
 )
 
@@ -599,70 +563,33 @@ export class MemoryDriver extends Effect.Service<MemoryDriver>()("@effect/cluste
           }
           return replies
         }),
-      unprocessedMessages: ({ cursor, existingShards, newShards }: EncodedUnprocessedOptions<number>) =>
+      unprocessedMessages: (shardIds) =>
         Effect.sync(() => {
-          if (unprocessed.size === 0) return [[], cursor] as const
+          if (unprocessed.size === 0) return []
           const messages = Arr.empty<{
             envelope: Envelope.Envelope.Encoded
             lastSentReply: Option.Option<Reply.ReplyEncoded<any>>
           }>()
-          const existingCursor = Option.getOrElse(cursor, () => journal.indexOf(Iterable.unsafeHead(unprocessed)))
-          const checkNew = newShards.length > 0
-          let checkExisting = false
-          let index = checkNew
-            ? journal.indexOf(Iterable.unsafeHead(unprocessed))
-            : existingCursor
+          let index = journal.indexOf(Iterable.unsafeHead(unprocessed))
           for (; index < journal.length; index++) {
-            const message = journal[index]
-            if (index === existingCursor) {
-              checkExisting = true
+            const envelope = journal[index]
+            if (!shardIds.includes(envelope.address.shardId)) {
+              continue
             }
-            if (checkNew && newShards.includes(message.address.shardId)) {
-              switch (message._tag) {
-                case "Request": {
-                  if (!unprocessed.has(message)) {
-                    break
-                  }
-                  const entry = requests.get(message.requestId)!
-                  messages.push({
-                    envelope: message,
-                    lastSentReply: Arr.last(entry.replies)
-                  })
-                  break
-                }
-                case "Interrupt": {
-                  messages.push({
-                    envelope: message,
-                    lastSentReply: Option.none()
-                  })
-                  break
-                }
-              }
-            } else if (checkExisting && existingShards.includes(message.address.shardId)) {
-              switch (message._tag) {
-                case "Request": {
-                  if (!unprocessed.has(message)) {
-                    break
-                  }
-                  const entry = requests.get(message.requestId)!
-                  messages.push({
-                    envelope: message,
-                    lastSentReply: Arr.last(entry.replies)
-                  })
-                  break
-                }
-                case "AckChunk":
-                case "Interrupt": {
-                  messages.push({
-                    envelope: message,
-                    lastSentReply: Option.none()
-                  })
-                  break
-                }
-              }
+            if (envelope._tag === "Request") {
+              const entry = requests.get(envelope.requestId)!
+              messages.push({
+                envelope,
+                lastSentReply: Arr.last(entry.replies)
+              })
+            } else {
+              messages.push({
+                envelope,
+                lastSentReply: Option.none()
+              })
             }
           }
-          return [messages, Option.some(index)] as const
+          return messages
         }),
       unprocessedMessagesById: (ids) =>
         Effect.sync(() => {
@@ -671,7 +598,8 @@ export class MemoryDriver extends Effect.Service<MemoryDriver>()("@effect/cluste
             envelopeIds.add(String(id))
           }
           return unprocessedWith((envelope) => envelopeIds.has(envelope.requestId))
-        })
+        }),
+      resetAddress: () => Effect.void
     }
 
     const storage = yield* makeEncoded(encoded)
