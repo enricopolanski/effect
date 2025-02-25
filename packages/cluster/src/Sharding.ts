@@ -223,6 +223,7 @@ export const make = Effect.gen(function*() {
           acquiredShards.add(shardId)
         }
         if (acquired.length > 0) {
+          yield* Effect.log("Acquired shards", acquired)
           yield* storageReadLatch.open
           yield* Effect.forkIn(syncSingletons, shardingScope)
         }

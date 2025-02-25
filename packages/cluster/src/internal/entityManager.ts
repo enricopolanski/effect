@@ -142,6 +142,13 @@ export const make = Effect.fnUntraced(function*<
                     exit: response.exit
                   })
                 )
+              ).pipe(
+                Effect.tapError((error) =>
+                  Effect.annotateLogs(Effect.logError("Error responding to request", error), {
+                    address,
+                    pod: options.podAddress
+                  })
+                )
               )
             ).pipe(
               Effect.flatMap(() => {
